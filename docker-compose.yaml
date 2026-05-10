@@ -1,0 +1,105 @@
+services:
+
+  # --- INFRAESTRUTURA ORIGINAL (MANTIDA) ---
+
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: iedr_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: iedr_db
+      POSTGRES_USER: iedr_user
+      POSTGRES_PASSWORD: 123456
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - iedr_network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: iedr_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@iedr.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - iedr_network
+
+  redis:
+    image: redis:7
+    container_name: iedr_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - iedr_network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: iedr_rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
+    networks:
+      - iedr_network
+
+  # --- ADIÇÕES PARA FUNCIONAMENTO DO APP (COM MAPEAMENTO DE VOLUMES) ---
+
+  auth-service:
+    build: 
+      context: F:/Plataforma_IEDR/backend/auth-service
+      dockerfile: Dockerfile
+    container_name: iedr_auth_service
+    restart: always
+    ports:
+      - "8000:8000"
+    # O PULO DO GATO: Agora o Docker lê seu código em tempo real
+    volumes:
+      - F:/Plataforma_IEDR/backend/auth-service:/app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://iedr_user:123456@postgres:5432/iedr_db
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://admin:admin123@rabbitmq:5672/
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - iedr_network
+
+  frontend:
+    build:
+      context: F:/Plataforma_IEDR/frontend
+      dockerfile: Dockerfile
+    container_name: iedr_frontend
+    restart: always
+    ports:
+      - "5173:5173"
+    # Adicionado volume também no frontend para facilitar seus testes
+    volumes:
+      - F:/Plataforma_IEDR/frontend:/app
+      - /app/node_modules # Evita conflito de bibliotecas entre Windows e Docker
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - auth-service
+    networks:
+      - iedr_network
+
+volumes:
+  postgres_data:
+
+networks:
+  iedr_network:
+    driver: bridge
