@@ -10,26 +10,23 @@ router = APIRouter()
 # =================================================================
 # 🟢 INTEGRAÇÃO DE ECOSSISTEMA: WZAP MARKETING (CROSS-SELL)
 # =================================================================
+# "INATIVO": Fluxo padrão. "ATIVO": Dispara as ofertas via WhatsApp
 INTEGRACAO_WZAP_MARKETING = "INATIVO"
-INTEGRACAO_ORCAMENTO_FAMILIAR = "INATIVO"
 WZAP_API_URL = "http://localhost:porta_do_seu_wzap/api/send"
 
 # =================================================================
 # ⚙️ CONFIGURAÇÃO DE INFRAESTRUTURA WHITE LABEL (MOTOR DE PREÇOS)
 # =================================================================
+# MODO "LOCAL": Usa o super catálogo de 100 itens em memória (Custo R$ 0)
+# MODO "GOOGLE_CLOUD": Ativa a rota avançada de busca refinada na nuvem do Google
+# MODO "BANCO_DE_DADOS": Ativa a leitura em banco relacional (Enterprise/SQL)
 MODO_MOTOR_PRECO = "LOCAL" 
 
+# Configurações de credenciais para upgrades (Google e Banco de Dados)
 GOOGLE_PROJECT_ID = "seu-projeto-google-cloud"
 GOOGLE_BIGQUERY_DATASET = "dataset_precos_brasil"
 DB_CONNECTION_STRING = "postgresql://usuario:senha@localhost:5432/compras_db"
 # =================================================================
-
-# --- FUNÇÕES DE INTEGRAÇÃO (DEFINIDAS UMA ÚNICA VEZ) ---
-async def disparar_alerta_wzap_marketing(telefone_cliente: str, mercado_campeao: str, valor_total: float):
-    print(f"🟢 WZAP MARKETING ATIVADO: Preparando envio de ofertas para o WhatsApp...")
-
-async def enviar_para_orcamento_familiar(cesta_otimizada: dict):
-    print("📈 INTEGRAÇÃO FINANCEIRA: Dados da cesta enviados para o módulo de Orçamento Familiar.")
 
 # --- MODELOS ---
 class ItemCesta(BaseModel):
@@ -81,10 +78,29 @@ async def raspar_preco_na_web(url_busca: str, seletor_css: str, produto: str):
         print(f"DEBUG SCRAPER: Falha ao raspar na URL {url_busca}: {e}")
     return None
 
+# --- ROTA DE INTEGRAÇÃO PROPRIETÁRIA: WZAP MARKETING ---
+async def disparar_alerta_wzap_marketing(telefone_cliente: str, mercado_campeao: str, valor_total: float):
+    """
+    Hook de integração com o wZap Marketing.
+    Ativado quando o cliente compra o pacote com módulo de disparo WhatsApp.
+    """
+    try:
+        print(f"🟢 WZAP MARKETING ATIVADO: Preparando envio de ofertas para o WhatsApp...")
+        mensagem_promo = f"🔥 OFERTA DETECTADA! O {mercado_campeao} está com a cesta mais barata hoje: R$ {valor_total:.2f}. Aproveite!"
+        
+        # O código abaixo fica preparado para chamar a API local do seu wZap Marketing
+        # payload = {"number": telefone_cliente, "message": mensagem_promo}
+        # async with httpx.AsyncClient() as client:
+        #     await client.post(WZAP_API_URL, json=payload, timeout=3.0)
+        
+        print("✅ Disparo via wZap Marketing simulado com sucesso no terminal!")
+    except Exception as e:
+        print(f"Erro na comunicação com o wZap Marketing: {e}")
+
 # --- ROTA DE UPGRADE 1: SIMULADOR GOOGLE CLOUD ---
 async def consultar_busca_refinada_google_cloud(mercado_perfil: str, produto_termo: str):
     try:
-        print(f"📡 GOOGLE CLOUD ATIVO: Executando Varredura Refinada...")
+        print(f"📡 GOOGLE CLOUD ATIVO: Executando Varredura Refinada no projeto [{GOOGLE_PROJECT_ID}]...")
         precos_base_nuvem = {
             "arroz": {"ATACADO_GRANDE": 18.45, "MEDIO_PORTE": 19.99, "PEQUENO_EXPRESS": 21.90},
             "feijão": {"ATACADO_GRANDE": 6.50,  "MEDIO_PORTE": 7.50,  "PEQUENO_EXPRESS": 8.20}
@@ -92,21 +108,29 @@ async def consultar_busca_refinada_google_cloud(mercado_perfil: str, produto_ter
         tabela = precos_base_nuvem.get(produto_termo, {"ATACADO_GRANDE": 14.90, "MEDIO_PORTE": 15.90, "PEQUENO_EXPRESS": 16.90})
         return tabela.get(mercado_perfil, 15.00)
     except Exception as e:
+        print(f"Erro na conexão com Google Cloud: {e}. Retornando segurança.")
         return 15.00
+
+# --- FUNÇÃO DE EXTENSÃO: INTEGRAÇÃO COM ORÇAMENTO FAMILIAR ---
+async def enviar_para_orcamento_familiar(cesta_otimizada: dict):
+    # O sistema pode enviar via webhook ou salvar em um arquivo 
+    # de sincronização que o seu Orçamento Familiar lê.
+    print("📈 INTEGRAÇÃO FINANCEIRA: Dados da cesta enviados para o módulo de Orçamento Familiar.")
 
 # --- ROTA DE UPGRADE 2: SIMULADOR BANCO DE DADOS (ENTERPRISE) ---
 async def consultar_busca_banco_dados(mercado_perfil: str, produto_termo: str):
     try:
-        print(f"🗄️ BANCO DE DADOS ATIVO: Consultando tabelas SQL...")
+        print(f"🗄️ BANCO DE DADOS ATIVO: Consultando tabelas SQL na conexão configurada...")
         precos_base_sql = {
             "arroz": {"ATACADO_GRANDE": 18.99, "MEDIO_PORTE": 20.00, "PEQUENO_EXPRESS": 22.50}
         }
         tabela = precos_base_sql.get(produto_termo, {"ATACADO_GRANDE": 14.50, "MEDIO_PORTE": 15.50, "PEQUENO_EXPRESS": 16.50})
         return tabela.get(mercado_perfil, 15.00)
     except Exception as e:
+        print(f"Erro na conexão com Banco de Dados: {e}. Retornando segurança.")
         return 15.00
 
-# --- MOTOR DE BUSCA UNIVERSAL (CATÁLOGO COMPLETO) ---
+# --- MOTOR DE BUSCA UNIVERSAL EM MEMÓRIA (PRODUTO NACIONAL WHITE LABEL) ---
 async def motor_de_busca_inteligente(mercado_nome: str, produto_nome: str):
     try:
         mercado_limpo = mercado_nome.strip().upper()
@@ -143,6 +167,7 @@ async def motor_de_busca_inteligente(mercado_nome: str, produto_nome: str):
             "milho verde":  {"ATACADO_GRANDE": 2.70,  "MEDIO_PORTE": 3.10,  "PEQUENO_EXPRESS": 3.50},
             "ervilha":      {"ATACADO_GRANDE": 2.50,  "MEDIO_PORTE": 2.90,  "PEQUENO_EXPRESS": 3.30},
             "extrato de tomate": {"ATACADO_GRANDE": 3.10, "MEDIO_PORTE": 3.50, "PEQUENO_EXPRESS": 3.99},
+
             "carne moída":  {"ATACADO_GRANDE": 22.90, "MEDIO_PORTE": 24.90, "PEQUENO_EXPRESS": 27.50},
             "patinho":      {"ATACADO_GRANDE": 29.90, "MEDIO_PORTE": 32.90, "PEQUENO_EXPRESS": 35.90},
             "acém":         {"ATACADO_GRANDE": 20.90, "MEDIO_PORTE": 22.90, "PEQUENO_EXPRESS": 25.40},
@@ -153,6 +178,7 @@ async def motor_de_busca_inteligente(mercado_nome: str, produto_nome: str):
             "linguiça":     {"ATACADO_GRANDE": 16.90, "MEDIO_PORTE": 18.90, "PEQUENO_EXPRESS": 21.00},
             "salsicha":     {"ATACADO_GRANDE": 8.80,  "MEDIO_PORTE": 9.90,  "PEQUENO_EXPRESS": 10.95},
             "peixe":        {"ATACADO_GRANDE": 26.90, "MEDIO_PORTE": 29.90, "PEQUENO_EXPRESS": 33.50},
+
             "batata":       {"ATACADO_GRANDE": 4.80,  "MEDIO_PORTE": 5.50,  "PEQUENO_EXPRESS": 6.20},
             "cebola":       {"ATACADO_GRANDE": 4.10,  "MEDIO_PORTE": 4.80,  "PEQUENO_EXPRESS": 5.40},
             "tomate":       {"ATACADO_GRANDE": 6.90,  "MEDIO_PORTE": 7.90,  "PEQUENO_EXPRESS": 8.90},
@@ -165,6 +191,7 @@ async def motor_de_busca_inteligente(mercado_nome: str, produto_nome: str):
             "mamão":        {"ATACADO_GRANDE": 5.90,  "MEDIO_PORTE": 6.90,  "PEQUENO_EXPRESS": 7.80},
             "alface":       {"ATACADO_GRANDE": 2.99,  "MEDIO_PORTE": 3.50,  "PEQUENO_EXPRESS": 3.99},
             "repolho":      {"ATACADO_GRANDE": 3.50,  "MEDIO_PORTE": 4.10,  "PEQUENO_EXPRESS": 4.60},
+
             "pão de forma": {"ATACADO_GRANDE": 5.90,  "MEDIO_PORTE": 6.90,  "PEQUENO_EXPRESS": 7.80},
             "biscoito salgado": {"ATACADO_GRANDE": 2.99, "MEDIO_PORTE": 3.50, "PEQUENO_EXPRESS": 4.10},
             "biscoito recheado": {"ATACADO_GRANDE": 1.99, "MEDIO_PORTE": 2.40, "PEQUENO_EXPRESS": 2.85},
@@ -173,6 +200,7 @@ async def motor_de_busca_inteligente(mercado_nome: str, produto_nome: str):
             "cereal":       {"ATACADO_GRANDE": 10.50, "MEDIO_PORTE": 11.90, "PEQUENO_EXPRESS": 13.40},
             "gelatina":     {"ATACADO_GRANDE": 1.15,  "MEDIO_PORTE": 1.40,  "PEQUENO_EXPRESS": 1.70},
             "bolo misturado": {"ATACADO_GRANDE": 4.80, "MEDIO_PORTE": 5.50, "PEQUENO_EXPRESS": 6.20},
+
             "leite":        {"ATACADO_GRANDE": 4.20,  "MEDIO_PORTE": 4.80,  "PEQUENO_EXPRESS": 5.40},
             "ovos":         {"ATACADO_GRANDE": 11.50, "MEDIO_PORTE": 12.90, "PEQUENO_EXPRESS": 14.50},
             "manteiga":     {"ATACADO_GRANDE": 8.90,  "MEDIO_PORTE": 9.80,  "PEQUENO_EXPRESS": 10.90},
@@ -183,6 +211,7 @@ async def motor_de_busca_inteligente(mercado_nome: str, produto_nome: str):
             "iogurte":      {"ATACADO_GRANDE": 5.90,  "MEDIO_PORTE": 6.90,  "PEQUENO_EXPRESS": 7.80},
             "creme de leite": {"ATACADO_GRANDE": 2.49, "MEDIO_PORTE": 2.99,  "PEQUENO_EXPRESS": 3.45},
             "leite condensado": {"ATACADO_GRANDE": 4.90, "MEDIO_PORTE": 5.50, "PEQUENO_EXPRESS": 6.15},
+
             "refrigerante": {"ATACADO_GRANDE": 7.90,  "MEDIO_PORTE": 8.90,  "PEQUENO_EXPRESS": 9.95},
             "suco":         {"ATACADO_GRANDE": 4.50,  "MEDIO_PORTE": 5.20,  "PEQUENO_EXPRESS": 5.95},
             "água mineral": {"ATACADO_GRANDE": 1.70,  "MEDIO_PORTE": 2.20,  "PEQUENO_EXPRESS": 2.70},
@@ -190,12 +219,14 @@ async def motor_de_busca_inteligente(mercado_nome: str, produto_nome: str):
             "vinho":        {"ATACADO_GRANDE": 19.90, "MEDIO_PORTE": 22.90, "PEQUENO_EXPRESS": 25.99},
             "bebida láctea": {"ATACADO_GRANDE": 3.40,  "MEDIO_PORTE": 3.90,  "PEQUENO_EXPRESS": 4.45},
             "energético":   {"ATACADO_GRANDE": 7.50,  "MEDIO_PORTE": 8.50,  "PEQUENO_EXPRESS": 9.80},
+
             "lasanha":      {"ATACADO_GRANDE": 10.50, "MEDIO_PORTE": 11.90, "PEQUENO_EXPRESS": 13.20},
             "pizza":        {"ATACADO_GRANDE": 10.90, "MEDIO_PORTE": 12.50, "PEQUENO_EXPRESS": 14.10},
             "hambúrguer":   {"ATACADO_GRANDE": 13.20, "MEDIO_PORTE": 14.90, "PEQUENO_EXPRESS": 16.80},
             "pão de queijo": {"ATACADO_GRANDE": 11.90, "MEDIO_PORTE": 13.50, "PEQUENO_EXPRESS": 14.95},
             "sorvete":      {"ATACADO_GRANDE": 21.90, "MEDIO_PORTE": 24.90, "PEQUENO_EXPRESS": 28.50},
             "batata frita palito": {"ATACADO_GRANDE": 14.90, "MEDIO_PORTE": 16.90, "PEQUENO_EXPRESS": 18.99},
+
             "detergente":   {"ATACADO_GRANDE": 1.85,  "MEDIO_PORTE": 2.20,  "PEQUENO_EXPRESS": 2.55},
             "sabão em pó":  {"ATACADO_GRANDE": 13.20, "MEDIO_PORTE": 14.90, "PEQUENO_EXPRESS": 16.80},
             "sabão em barra": {"ATACADO_GRANDE": 8.40,  "MEDIO_PORTE": 9.50,  "PEQUENO_EXPRESS": 10.80},
@@ -207,6 +238,7 @@ async def motor_de_busca_inteligente(mercado_nome: str, produto_nome: str):
             "álcool":       {"ATACADO_GRANDE": 5.20,  "MEDIO_PORTE": 5.90,  "PEQUENO_EXPRESS": 6.70},
             "saco de lixo": {"ATACADO_GRANDE": 8.50,  "MEDIO_PORTE": 9.80,  "PEQUENO_EXPRESS": 11.20},
             "inseticida":   {"ATACADO_GRANDE": 9.99,  "MEDIO_PORTE": 11.50, "PEQUENO_EXPRESS": 13.10},
+
             "papel higiênico": {"ATACADO_GRANDE": 13.20, "MEDIO_PORTE": 14.50, "PEQUENO_EXPRESS": 16.50},
             "sabonete":     {"ATACADO_GRANDE": 1.99,  "MEDIO_PORTE": 2.50,  "PEQUENO_EXPRESS": 2.99},
             "creme dental": {"ATACADO_GRANDE": 2.99,  "MEDIO_PORTE": 3.50,  "PEQUENO_EXPRESS": 4.10},
@@ -218,18 +250,20 @@ async def motor_de_busca_inteligente(mercado_nome: str, produto_nome: str):
             "cotonete":     {"ATACADO_GRANDE": 3.90,  "MEDIO_PORTE": 4.50,  "PEQUENO_EXPRESS": 5.15},
             "aparelho de barbear": {"ATACADO_GRANDE": 11.20, "MEDIO_PORTE": 12.90, "PEQUENO_EXPRESS": 14.60}
         }
-        
+
         tabela_perfis_encontrada = {}
         for item_catalogo in CATALOGO_NACIONAL:
             if item_catalogo in produto_limpo:
                 tabela_perfis_encontrada = CATALOGO_NACIONAL[item_catalogo]
                 break
-        
-        return tabela_perfis_encontrada.get(perfil_mercado, 15.00)
+
+        preco_final = tabela_perfis_encontrada.get(perfil_mercado, 15.00)
+        return preco_final
+            
     except Exception:
         return 15.00
-    
-    # --- BUSCA DE MERCADO ---
+
+# --- BUSCA DE MERCADO ---
 async def buscar_mercado_real(m_info: dict, item: ItemCesta):
     nome_mercado = m_info.get('nome')
     nome_prod = item.product_name or item.nome or "item"
@@ -258,22 +292,26 @@ async def descobrir_mercados_no_mapa(lat: float, lng: float, raio_km: float):
             response = await client.get(url, headers=headers, timeout=4.0)
             if response.status_code == 200:
                 dados_mapa = response.json()
+                
                 for idx, item in enumerate(dados_mapa):
                     address = item.get("address", {})
                     merc_lat = float(item.get("lat", latitude))
                     merc_lng = float(item.get("lon", longitude))
                     
                     dist_real = calcular_distancia(latitude, longitude, merc_lat, merc_lng)
-                    if dist_real > (limite_raio_corte * 1.5): continue
+                    if dist_real > (limite_raio_corte * 1.5):
+                        continue
                         
                     nome_mapa = address.get("supermarket") or address.get("shop") or item.get("name") or ""
-                    if nome_mapa.lower() in ["supermercado", "supermarket", "mercado", ""]: continue
+                    if nome_mapa.lower() in ["supermercado", "supermarket", "mercado", ""]:
+                        continue
                         
                     lista_mercados.append({
                         "nome": nome_mapa.strip().upper(),
                         "distancia": round(dist_real if dist_real > 0.1 else 0.8, 2)
                     })
-    except Exception: pass
+    except Exception:
+        pass
 
     if not lista_mercados:
         print("🚨 CONTINGÊNCIA GEOGRÁFICA ATIVADA: Gerando ecossistema restrito ao CEP do usuário...")
@@ -286,7 +324,8 @@ async def descobrir_mercados_no_mapa(lat: float, lng: float, raio_km: float):
                     addr = res_rev.json().get("address", {})
                     bairro_local = addr.get("suburb") or addr.get("road") or addr.get("neighbourhood") or "Localidade"
                     bairro_local = bairro_local.split(",")[0].strip()
-        except Exception: pass
+        except Exception:
+            pass
 
         lista_mercados = [
             {"nome": f"KRILL ATACADÃO - {bairro_local.upper()}", "distancia": 1.20},
@@ -294,6 +333,7 @@ async def descobrir_mercados_no_mapa(lat: float, lng: float, raio_km: float):
             {"nome": f"LITORAL SUPERMERCADOS", "distancia": 3.10},
             {"nome": f"MINI MERCADO EXPRESS ({bairro_local.upper()})", "distancia": 4.60}
         ]
+
     return lista_mercados
 
 # --- ROTA PRINCIPAL OTIMIZADA ---
@@ -313,40 +353,50 @@ async def otimizar_cesta(req: RequisicaoOtimizacao):
     try:
         lista_itens = getattr(req, 'itens', None) or getattr(req, 'items', None) or getattr(req, 'cesta', None) or []
         resultados = []
+        
         for m in mercados:
             total = 0
             for item in lista_itens:
                 nome_item = getattr(item, 'nome', getattr(item, 'product_name', "item"))
                 qtd_item = getattr(item, 'quantidade', getattr(item, 'quantity', 1))
+                
                 preco_unit = await motor_de_busca_inteligente(m['nome'], nome_item)
                 total += float(preco_unit) * float(qtd_item)
             
-            dist = m.get('distancia', 1.5)
-            fator_combustivel = 0.50 if req.transporte not in ['a_pe', 'bicicleta'] else 0.0
-            custo_final = total + (dist * fator_combustivel)
+            distancia_mercado = m.get('distancia', 1.5)
+            tipo_transporte = getattr(req, 'transporte', 'carro')
+            fator_combustivel = 0.0 if tipo_transporte in ['a_pe', 'bicicleta'] else 0.50
+            custo_final = total + (distancia_mercado * fator_combustivel)
+            
             resultados.append({
                 "market_name": m['nome'].upper(),
                 "total_produtos": round(total, 2),
                 "custo_total_final": round(custo_final, 2),
-                "distancia": round(dist, 2)
-            })
+                "distancia": round(distancia_mercado, 2)
+              })
 
         resultados = sorted(resultados, key=lambda x: x['custo_total_final'])
         melhor = resultados[0]
         
-        # --- GATILHOS DE INTEGRAÇÃO (ÚNICA INSTÂNCIA) ---
+        # =================================================================
+        # 🟢 GATILHO DE INTEGRAÇÃO (WZAP MARKETING)
+        # =================================================================
         if INTEGRACAO_WZAP_MARKETING == "ATIVO":
             await disparar_alerta_wzap_marketing("5511999999999", melhor['market_name'], melhor['custo_total_final'])
         
-        if INTEGRACAO_ORCAMENTO_FAMILIAR == "ATIVO":
-            await enviar_para_orcamento_familiar(melhor)
-        
+        # =================================================================
+        # 💰 PONTO DE EXTENSÃO: INTEGRAÇÃO COM ORÇAMENTO FAMILIAR
+        # =================================================================
+        # Para ativar a integração no futuro, basta descomentar a linha abaixo:
+        # await enviar_para_orcamento_familiar(melhor)
+        # =================================================================
         
         return {
             "best_market": melhor['market_name'], 
             "lowest_total_price": melhor['custo_total_final'], 
             "comparativo": resultados
         }
+        
     except Exception as e:
         print(f"ERRO CRÍTICO NO CÁLCULO MAPEADO: {e}")
         return {"best_market": "Erro de processamento", "lowest_total_price": 0.0, "comparativo": []}

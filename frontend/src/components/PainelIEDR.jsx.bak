@@ -1,0 +1,106 @@
+import React, { useState } from 'react';
+
+export default function PainelIEDR() {
+  const [dados, setDados] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState(null);
+  const [termoBusca, setTermoBusca] = useState('arroz'); // Estado para a barra de busca
+
+  const buscarPrecosAoVivo = async (e) => {
+    e.preventDefault(); // Evita recarregar a página ao dar Enter
+    if (!termoBusca) return;
+    
+    setLoading(true);
+    setErro(null);
+    try {
+      // Agora bate na rota nacional de comparação, passando o que o usuário digitou!
+      const response = await fetch(`http://127.0.0.1:8000/pricing/comparar?termo=${encodeURIComponent(termoBusca)}`);
+      
+      if (!response.ok) {
+        throw new Error("Nenhum produto encontrado ou falha no servidor.");
+      }
+      const data = await response.json();
+      setDados(data);
+    } catch (err) {
+      setErro(err.message);
+      setDados(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '1200px', margin: '0 auto' }}>
+      <h1>🔍 IEDR - Buscador Universal em Tempo Real</h1>
+      <p>Pesquise qualquer produto. Nós invadiremos os mercados locais para achar o menor preço por Quilo/Litro.</p>
+      
+      {/* BARRA DE BUSCA */}
+      <form onSubmit={buscarPrecosAoVivo} style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+        <input 
+          type="text" 
+          value={termoBusca}
+          onChange={(e) => setTermoBusca(e.target.value)}
+          placeholder="Ex: contra file, picanha, leite..."
+          style={{ flex: 1, padding: '12px', fontSize: '16px', borderRadius: '8px', border: '1px solid #ccc' }}
+        />
+        <button 
+          type="submit" 
+          disabled={loading}
+          style={{ padding: '12px 24px', fontSize: '16px', cursor: 'pointer', backgroundColor: '#0056b3', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold' }}
+        >
+          {loading ? '⏳ Infiltrando...' : 'Pesquisar'}
+        </button>
+      </form>
+
+      {erro && <p style={{ color: 'red', marginTop: '20px', fontWeight: 'bold' }}>❌ {erro}</p>}
+
+      {dados && (
+        <div style={{ marginTop: '30px' }}>
+          <div style={{ backgroundColor: '#d4edda', color: '#155724', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
+            ✅ <strong>Sucesso!</strong> {dados.total_encontrado} opções de "{dados.termo_buscado}" processadas.
+          </div>
+
+          <h2>🏆 O Campeão Absoluto (Mais Barato do Bairro)</h2>
+          {dados.produtos.length > 0 && (
+            <div style={{ border: '2px solid #28a745', padding: '20px', borderRadius: '12px', backgroundColor: '#f0fff0', marginBottom: '30px' }}>
+              <h3 style={{ margin: '0 0 10px 0', color: '#155724' }}>📍 {dados.produtos[0].mercado}</h3>
+              <h2 style={{ color: '#28a745', margin: '10px 0', fontSize: '32px' }}>
+                R$ {dados.produtos[0].preco_por_kg.toFixed(2)} <small style={{fontSize: '16px', color: '#666'}}>/kg</small>
+              </h2>
+              <p style={{ fontSize: '18px', color: '#333', margin: '0 0 5px 0', fontWeight: 'bold' }}>{dados.produtos[0].nome}</p>
+              <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>Preço do pacote/unidade: R$ {dados.produtos[0].preco_vitrine.toFixed(2)}</p>
+            </div>
+          )}
+
+          <h2>📋 Ranking Completo (Do mais barato ao mais caro)</h2>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '600px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f2f2f2' }}>
+                  <th style={{ padding: '12px', borderBottom: '2px solid #ddd' }}>Posição</th>
+                  <th style={{ padding: '12px', borderBottom: '2px solid #ddd' }}>Mercado</th>
+                  <th style={{ padding: '12px', borderBottom: '2px solid #ddd' }}>Produto</th>
+                  <th style={{ padding: '12px', borderBottom: '2px solid #ddd' }}>Preço Vitrine</th>
+                  <th style={{ padding: '12px', borderBottom: '2px solid #ddd', color: '#28a745' }}>Preço Real/KG</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dados.produtos.map((produto, index) => (
+                  <tr key={index} style={{ borderBottom: '1px solid #eee', backgroundColor: index === 0 ? '#f8fff8' : 'transparent' }}>
+                    <td style={{ padding: '12px', fontWeight: 'bold', color: index === 0 ? '#28a745' : '#666' }}>#{index + 1}</td>
+                    <td style={{ padding: '12px' }}>{produto.mercado}</td>
+                    <td style={{ padding: '12px' }}>{produto.nome}</td>
+                    <td style={{ padding: '12px', color: '#888' }}>R$ {produto.preco_vitrine.toFixed(2)}</td>
+                    <td style={{ padding: '12px', fontWeight: 'bold', color: index === 0 ? '#28a745' : '#333' }}>
+                      R$ {produto.preco_por_kg.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

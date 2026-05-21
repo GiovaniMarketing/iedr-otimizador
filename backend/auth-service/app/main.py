@@ -6,9 +6,14 @@ from contextlib import asynccontextmanager
 from app.api import optimizer, pricing  # Importe o novo router de pricing
 from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from app.api import pricing
 from dotenv import load_dotenv
+
+app = FastAPI(title="IEDR API")
+
+# --- MÓDULOS DE BANCO DE DADOS DESATIVADOS (MODO CSV) ---
+# from sqlalchemy import text
+# from sqlalchemy.ext.asyncio import AsyncSession
 
 
 # FORÇA O PATH: Garante que o Python encontre a pasta 'app' e 'api'
@@ -21,8 +26,9 @@ if os.path.join(current_dir, "app") not in sys.path:
     sys.path.insert(0, os.path.join(current_dir, "app"))
 
 # Importações de Infraestrutura
-from app.db.session import engine, get_db
-from app.models.base import Base
+# --- CONEXÕES DE BANCO DE DADOS DESATIVADAS (MODO CSV) ---
+# from app.db.session import engine, get_db
+# from app.models.base import Base
 
 # Importações das Rotas Originais
 from app.api.user_routes import router as user_router
@@ -68,15 +74,10 @@ LOGGING_CONFIG = {
 dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger(__name__)
 
-# =====================================================
-# CICLO DE VIDA (LIFESPAN)
-# =====================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Iniciando IEDR Auth Service e sincronizando tabelas...")
-    #async with engine.begin() as conn:
-    #    await conn.run_sync(Base.metadata.create_all)
-    logger.info("Banco de dados pronto para operações.")
+    logger.info("Iniciando IEDR Motor de Cálculo...")
+    # Removemos as mensagens sobre arquivos locais/CSV
     yield
     logger.info("Encerrando aplicação...")
 
@@ -109,16 +110,20 @@ app.add_middleware(
 # REGISTRO DE TODAS AS ROTAS (ROUTERS)
 # =====================================================
 
-# Rotas de Usuários e Otimizador (Mantidas intactas)
+# Rotas base
 app.include_router(user_router, prefix="/users", tags=["Users"])
-app.include_router(optimizer_router, prefix="/optimizer", tags=["Optimizer"])
+# app.include_router(optimizer_router, prefix="/optimizer", tags=["Optimizer"]) # COMENTADO PARA EVITAR CONFLITO
+app.include_router(pricing.router, prefix="/optimizer", tags=["Optimizer"])
 app.include_router(pricing.router, prefix="/pricing", tags=["Preços e OCR"])
+
+# TRUQUE DE ENGENHARIA: Registro espelho para garantir compatibilidade total
+# Se o seu React bater em /pricing/optimizer/basket, este registro resolve:
+app.include_router(pricing.router, prefix="/pricing/optimizer", tags=["Preços e OCR (Compatibilidade)"])
+
 # Registro Seguro do Catálogo
-# Resolve o NameError e o AttributeError de uma vez só
 if catalog and hasattr(catalog, 'router'):
     app.include_router(catalog.router, prefix="/catalog", tags=["Catalog"])
 else:
-    # Mensagem informativa amigável no console
     msg = "ℹ️ Info: Catalog importado como modelo" if catalog else "⚠️ Info: Catalog não disponível"
     print(f"{msg} - Sem rotas configuradas para o Swagger.")
 
@@ -134,22 +139,23 @@ async def root():
         "region": "São Sebastião - SP"
     }
 
-@app.get("/db-health")
-async def db_health(db: AsyncSession = Depends(get_db)):
-    try:
-        result = await db.execute(text("SELECT 1"))
-        return {
-            "database": "connected",
-            "status": "ok",
-            "check": result.scalar()
-        }
-    except Exception as e:
-        logger.error("Falha Crítica no Banco: %s", e)
-        return {
-            "database": "disconnected",
-            "status": "error",
-            "detail": str(e)
-        }
+# --- ENDPOINT DE SAÚDE DO BANCO DE DADOS DESATIVADO ---
+# @app.get("/db-health")
+# async def db_health(db: AsyncSession = Depends(get_db)):
+#     try:
+#         result = await db.execute(text("SELECT 1"))
+#         return {
+#             "database": "connected",
+#             "status": "ok",
+#             "check": result.scalar()
+#         }
+#     except Exception as e:
+#         logger.error("Falha Crítica no Banco: %s", e)
+#         return {
+#             "database": "disconnected",
+#             "status": "error",
+#             "detail": str(e)
+#         }
 
 @app.get("/debug/info")
 async def debug_info():
