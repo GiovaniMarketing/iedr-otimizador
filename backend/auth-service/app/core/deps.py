@@ -1,11 +1,14 @@
-from app.db.session import AsyncSessionLocal
+# app/core/deps.py
 from app.core.tenant import clear_tenant_id
 
-async def get_db():
+# Como você removeu o banco de dados SQL, 
+# a dependência 'get_db' agora apenas garante que o contexto do tenant
+# seja limpo após cada requisição, sem tentar abrir conexão com banco.
 
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            # garante que não "vaze" tenant entre requests
-            clear_tenant_id()
+async def get_db():
+    try:
+        # Retornamos None pois não há mais conexão SQL
+        yield None
+    finally:
+        # Garante que não "vaze" tenant entre requests, mesmo sem banco
+        clear_tenant_id()

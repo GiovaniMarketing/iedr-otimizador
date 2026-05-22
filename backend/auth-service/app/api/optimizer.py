@@ -14,7 +14,7 @@ from app.schemas.optimizer import (
     BasketOptimizationResponse,
     ProductResult
 )
-from app.db.session import get_db
+
 from app.models import Price, Market, MarketProduct, ProductMaster
 
 router = APIRouter()
@@ -27,30 +27,14 @@ logger = logging.getLogger(__name__)
     "/basket",
     response_model=BasketOptimizationResponse
 )
-async def optimize_basket(
-    payload: BasketOptimizationRequest,
-    db: AsyncSession = Depends(get_db)
-):
+async def optimize_basket(payload: BasketOptimizationRequest):
     try:
-        stmt = select(
-            Price, Market, MarketProduct, ProductMaster
-        ).join(
-            MarketProduct, MarketProduct.id == Price.market_product_id
-        ).join(
-            Market, Market.id == MarketProduct.market_id
-        ).join(
-            ProductMaster, ProductMaster.id == MarketProduct.product_master_id
-        )
-
-        rows = (await db.execute(stmt)).all()
-
-        catalog = build_catalog(
-            rows,
-            payload.latitude,
-            payload.longitude,
-            payload.radius_km
-        )
-
+        # --- AQUI VOCÊ DEVE CARREGAR SEUS DADOS ---
+        # Em vez de SELECT, você chamará uma função que traz os dados de um JSON/Redis
+        # Exemplo: catalog = carregar_catalog_memoria()
+        catalog = {} # Substitua pelo carregamento real dos seus dados
+        
+        # MarketplaceEngine agora trabalha com os dados que você carregou na memória
         engine = MarketplaceEngine(
             catalog=catalog,
             items=payload.items
@@ -104,7 +88,6 @@ async def optimize_basket(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Optimizer error: {str(e)}")
-
 
 # =============================================================================
 # 2. FUNÇÕES AUXILIARES PARA A NOVA ROTA "LIVE" (RADAR E EXTRATOR REAL JSON)

@@ -2,35 +2,37 @@ services:
 
   # --- INFRAESTRUTURA ORIGINAL (MANTIDA) ---
 
-  postgres:
-    image: postgis/postgis:16-3.4
-    container_name: iedr_postgres
-    restart: always
-    environment:
-      POSTGRES_DB: iedr_db
-      POSTGRES_USER: iedr_user
-      POSTGRES_PASSWORD: 123456
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - iedr_network
+  # --- INFRAESTRUTURA ORIGINAL (COMENTADA) ---
 
-  pgadmin:
-    image: dpage/pgadmin4
-    container_name: iedr_pgadmin
-    restart: always
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@iedr.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
-    ports:
-      - "5050:80"
-    depends_on:
-      - postgres
-    networks:
-      - iedr_network
+  # postgres:
+  #   image: postgis/postgis:16-3.4
+  #   container_name: iedr_postgres
+  #   restart: always
+  #   environment:
+  #     POSTGRES_DB: iedr_db
+  #     POSTGRES_USER: iedr_user
+  #     POSTGRES_PASSWORD: 123456
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #     - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+  #   networks:
+  #     - iedr_network
+
+  # pgadmin:
+  #   image: dpage/pgadmin4
+  #   container_name: iedr_pgadmin
+  #   restart: always
+  #   environment:
+  #     PGADMIN_DEFAULT_EMAIL: admin@iedr.com
+  #     PGADMIN_DEFAULT_PASSWORD: admin123
+  #   ports:
+  #     - "5050:80"
+  #   depends_on:
+  #     - postgres
+  #   networks:
+  #     - iedr_network
 
   redis:
     image: redis:7
@@ -64,17 +66,16 @@ services:
     restart: always
     ports:
       - "8000:8000"
-    # O PULO DO GATO: Agora o Docker lê seu código em tempo real
     volumes:
       - F:/Plataforma_IEDR/backend/auth-service:/app
     environment:
-      - DATABASE_URL=postgresql+asyncpg://iedr_user:123456@postgres:5432/iedr_db
       - REDIS_URL=redis://redis:6379/0
       - RABBITMQ_URL=amqp://admin:admin123@rabbitmq:5672/
-    depends_on:
-      - postgres
-      - redis
-      - rabbitmq
+    # O PULO DO GATO: Remova ou comente as linhas abaixo
+    # depends_on:
+    #   - postgres
+    #   - redis
+    #   - rabbitmq
     networks:
       - iedr_network
 

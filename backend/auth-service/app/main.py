@@ -9,7 +9,43 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import pricing
 from dotenv import load_dotenv
 
-app = FastAPI(title="IEDR API")
+
+# --- COLOQUE A CONFIGURAÇÃO DE CORS AQUI ---
+# Configuração de CORS
+
+# ... (seus imports)
+
+# 1. Definição do Lifespan
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Iniciando IEDR Motor de Cálculo...")
+    yield
+    logger.info("Encerrando aplicação...")
+
+# 2. Criação do app (A VARIÁVEL 'app' NASCE AQUI)
+app = FastAPI(
+    title="IEDR Auth Service",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# 3. CONFIGURAÇÃO DE CORS (Agora o 'app' já existe, pode usar!)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
+
+@app.options("/{rest_of_path:path}")
+async def preflight_handler(request: Request, rest_of_path: str):
+    return Response(status_code=200)
+
+# 4. O resto do seu código (Rotas, print do ID, etc...)
+print(">>> APP INSTANCE ID:", id(app))
+# ...
+
 
 # --- MÓDULOS DE BANCO DE DADOS DESATIVADOS (MODO CSV) ---
 # from sqlalchemy import text
@@ -74,37 +110,13 @@ LOGGING_CONFIG = {
 dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger(__name__)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("Iniciando IEDR Motor de Cálculo...")
-    # Removemos as mensagens sobre arquivos locais/CSV
-    yield
-    logger.info("Encerrando aplicação...")
 
 # =====================================================
 # INSTÂNCIA DO APP CORE
 # =====================================================
-app = FastAPI(
-    title="IEDR Auth Service",
-    version="1.0.0",
-    lifespan=lifespan
-)
+
 
 print(">>> APP INSTANCE ID:", id(app))
-
-# Configuração de CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174"
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # =====================================================
 # REGISTRO DE TODAS AS ROTAS (ROUTERS)
