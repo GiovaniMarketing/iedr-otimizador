@@ -1,3 +1,4 @@
+// Forçar deploy
 import React, { useState, useEffect, useCallback } from 'react';
 import { useUserLocation } from './hooks/useUserLocation';
 import { LocationFallback } from './components/LocationFallback';

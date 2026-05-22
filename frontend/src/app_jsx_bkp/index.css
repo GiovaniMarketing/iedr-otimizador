@@ -1,0 +1,79 @@
+/* 1. FUNDO GLOBAL (A escuridão com luz no topo para dar profundidade) */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  
+  /* A MÁGICA ESTÁ AQUI: Roxo quase preto com um brilho no topo */
+  background-color: #070312; 
+  background-image: radial-gradient(circle at 50% -20%, #1e0a3c 0%, transparent 70%); 
+  
+  color: #f8fafc;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* 2. CONTAINER PRINCIPAL DO REACT */
+#root {
+  width: 100%;
+  max-width: 500px;
+  display: flex;
+  justify-content: center;
+  padding: 20px 0; 
+}
+
+/* 3. RESET DE INPUTS COM BRILHO NEON */
+input {
+  box-sizing: border-box;
+  font-family: inherit;
+  transition: all 0.3s ease;
+}
+
+input:focus {
+  outline: none;
+  border-color: #d946ef !important; /* Brilho Rosa Neon ao digitar */
+  box-shadow: 0 0 20px rgba(217, 70, 239, 0.4) !important;
+}
+
+/* 4. COMPORTAMENTO DOS BOTÕES (APP NATIVO) */
+button {
+  box-sizing: border-box;
+  font-family: inherit;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:active:not(:disabled) { 
+  transform: scale(0.95); 
+}
+
+button:hover:not(:disabled) { 
+  filter: brightness(1.2); 
+}
+
+button:disabled { 
+  opacity: 0.4; 
+  cursor: not-allowed; 
+  transform: none !important; 
+}
+
+/* 5. BARRA DE ROLAGEM CUSTOMIZADA */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #070312; 
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3b0764; 
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #d946ef; 
+}
