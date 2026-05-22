@@ -19,6 +19,27 @@ function App() {
   const [isManualMode, setIsManualMode] = useState(false);
   const [transporte, setTransporte] = useState('carro');
 
+  // =================================================================
+  // 💥 DISPARO E RASTREAMENTO INDEPENDENTE 💥
+  // =================================================================
+  
+  // GATILHO 1: Dispara a busca pelo GPS automaticamente no instante em que o app abre
+  useEffect(() => {
+    if (typeof requestLocation === 'function') {
+      requestLocation();
+    }
+  }, [requestLocation]);
+
+  // GATILHO 2: Copia a coordenada do modem apenas se o usuário NÃO ativou o modo CEP manual
+  useEffect(() => {
+    if (geoLocation && !isManualMode) {
+      setLocation(geoLocation);
+      fetchAddressFromCoords(geoLocation.latitude, geoLocation.longitude);
+    }
+  }, [geoLocation, isManualMode]);
+
+  // =================================================================
+
   // Função para descobrir o endereço real a partir de coordenadas (Geocoding Reverso)
   const fetchAddressFromCoords = useCallback(async (lat, lng) => {
     try {
@@ -36,18 +57,21 @@ function App() {
           setReadableAddress(`${road}, ${city} - ${state}`);
           setIsWrongCity(false);
         } else {
-          setReadableAddress(`${city} - ${state} (Localização aproximada)`);
+          setReadableAddress(`${city} - ${state}`);
           setIsWrongCity(true);
         }
       } else {
-        setReadableAddress('Endereço não identificado no mapa.');
+        setReadableAddress(`Localização via Satélite (Lat: ${lat.toFixed(3)}, Lng: ${lng.toFixed(3)})`);
         setIsWrongCity(true);
       }
     } catch (err) {
-      setReadableAddress('Não foi possível carregar o endereço.');
+      // Se a API externa de mapas travar por CORS, mantém a tela aberta usando a numeração do GPS puro
+      setReadableAddress(`Localização baseada em Rede (Lat: ${lat.toFixed(3)})`);
+      setIsWrongCity(false);
     }
   }, []);
 
+  // Converte o CEP digitado manualmente em coordenadas reais
   // Converte o CEP digitado manualmente em coordenadas reais
   const handleCepSubmit = async (e) => {
     e.preventDefault();
@@ -57,6 +81,7 @@ function App() {
       return;
     }
 
+    setIsManualMode(true);
     setIsSearchingCep(true);
     setCepError(null);
     setReadableAddress('Buscando endereço do CEP...');
@@ -65,43 +90,57 @@ function App() {
       const viaCepRes = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
       const viaCepData = await viaCepRes.json();
 
-      if (viaCepData.erro) {
+      if (viaCepRes.status !== 200 || viaCepData.erro) {
         throw new Error('CEP não encontrado na base dos Correios.');
       }
 
-      const query = `${viaCepData.logradouro}, ${viaCepData.bairro}, ${viaCepData.localidade}, Brazil`;
-      const osmRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
-      const osmData = await osmRes.json();
+      // MONTAGEM DO ENDEREÇO EM NÍVEL NACIONAL (DADOS DO VIACEP)
+      const ruaLougradouro = viaCepData.logradouro ? viaCepData.logradouro : '';
+      const bairroRegiao = viaCepData.bairro ? viaCepData.bairro : '';
+      const parteRua = ruaLougradouro && bairroRegiao ? `${ruaLougradouro}, ${bairroRegiao}` : (ruaLougradouro || bairroRegiao || 'Centro');
+      const enderecoDefinitivo = `${parteRua}, ${viaCepData.localidade} - ${viaCepData.uf}`;
+      
+      // CONFIRMAÇÃO DO CEP EM TELA: Grava o texto dinâmico imediatamente na interface aqui!
+      setReadableAddress(enderecoDefinitivo);
+      setIsWrongCity(false);
 
-      if (osmData && osmData.length > 0) {
-        const newLat = parseFloat(osmData[0].lat);
-        const newLng = parseFloat(osmData[0].lon);
-        
-        setIsManualMode(true);
-        setLocation({ latitude: newLat, longitude: newLng });
-        setReadableAddress(`${viaCepData.logradouro || viaCepData.bairro}, ${viaCepData.localidade} - ${viaCepData.uf}`);
-        setIsWrongCity(false); 
-      } else {
-        const queryFallback = `${viaCepData.bairro}, ${viaCepData.localidade}, Brazil`;
-        const osmResFallback = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryFallback)}&limit=1`);
-        const osmDataFallback = await osmResFallback.json();
-        
-        if (osmDataFallback && osmDataFallback.length > 0) {
-          const newLatFb = parseFloat(osmDataFallback[0].lat);
-          const newLngFb = parseFloat(osmDataFallback[0].lon);
-          
-          setIsManualMode(true);
-          setLocation({ latitude: newLatFb, longitude: newLngFb });
-          setReadableAddress(`${viaCepData.bairro}, ${viaCepData.localidade} - ${viaCepData.uf}`);
-          setIsWrongCity(false);
-        } else {
-          throw new Error('Não foi possível obter as coordenadas para este CEP.');
+      // Desliga o carregamento do botão AGORA para impedir que ele fique preso em "Buscando..." se o mapa demorar
+      setIsSearchingCep(false);
+
+      // Isola a busca de coordenadas geográficas dentro de uma subfunção assíncrona isolada para não quebrar o escopo superior
+      const buscarCoordenadasMapa = async () => {
+        const query = `${viaCepData.logradouro || ''} ${viaCepData.bairro || ''} ${viaCepData.localidade} Brazil`;
+        try {
+          const osmRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+          const osmData = await osmRes.json();
+
+          if (osmData && osmData.length > 0 && osmData[0].lat) {
+            setLocation({ latitude: parseFloat(osmData[0].lat), longitude: parseFloat(osmData[0].lon) });
+          } else {
+            const queryFallback = `${viaCepData.bairro || ''} ${viaCepData.localidade} Brazil`;
+            const osmResFallback = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryFallback)}&limit=1`);
+            const osmDataFallback = await osmResFallback.json();
+            
+            if (osmDataFallback && osmDataFallback.length > 0 && osmDataFallback[0].lat) {
+              setLocation({ latitude: parseFloat(osmDataFallback[0].lat), longitude: parseFloat(osmDataFallback[0].lon) });
+            } else {
+              // Coordenada flutuante padrão neutra se a busca textual falhar por completo
+              setLocation({ latitude: -23.5489, longitude: -46.6388 });
+            }
+          }
+        } catch (osmErr) {
+          // Mantém a latitude padrão estável se houver estouro de rate limit ou erro de rede/CORS
+          setLocation({ latitude: -23.5489, longitude: -46.6388 });
         }
-      }
+      };
+
+      // Dispara a busca em segundo plano sem prender o fluxo principal do ViaCEP
+      buscarCoordenadasMapa();
+
     } catch (err) {
+      setIsManualMode(false);
       setCepError(err.message || 'Erro ao processar a busca do CEP.');
       setReadableAddress('Erro ao fixar endereço.');
-    } finally {
       setIsSearchingCep(false);
     }
   };
@@ -122,16 +161,45 @@ function App() {
   const custoDeslocamento = transporte === 'a_pe' ? 0.0 : (melhorMercado?.distancia || 0) * 0.50;
   const custoTotalFinal = melhorMercado?.custo_total_final || 0;
 
+  // 1º RETURN: Tela de Carregamento Inicial do GPS
+  if (!location && !isManualMode) {
+    return (
+      <div style={{ 
+        maxWidth: '1000px', margin: '40px auto', padding: '50px', textAlign: 'center',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        backgroundColor: '#fecdd3', borderRadius: '20px', border: '4px solid #e11d48',
+        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.15)'
+      }}>
+        <h1 style={{ fontSize: '26px', fontWeight: '900', color: '#be123c', textTransform: 'uppercase' }}>
+          🔥 DETECTANDO SUA POSIÇÃO VIA GPS... 🔥
+        </h1>
+        <p style={{ color: '#4c0519', fontSize: '16px', margin: '15px 0', fontWeight: '700' }}>
+          Buscando a posição exata do seu dispositivo para calcular o frete regionalizado.
+        </p>
+        
+        <div style={{ marginTop: '25px', padding: '20px', backgroundColor: '#fff', borderRadius: '12px', display: 'inline-block', border: '2px solid #fda4af' }}>
+          <form onSubmit={handleCepSubmit} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#4c0519' }}>GPS incorreto ou demorando? Digite o CEP:</span>
+            <input type="text" placeholder="00000-000" value={cep} onChange={(e) => setCep(e.target.value)} style={{ width: '120px', padding: '6px 12px', borderRadius: '6px', border: '2px solid #f43f5e', fontWeight: 'bold' }} />
+            <button type="submit" style={{ padding: '6px 16px', backgroundColor: '#e11d48', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: '800' }}>Buscar CEP</button>
+          </form>
+          {cepError && <p style={{ color: '#dc2626', margin: '10px 0 0 0', fontSize: '13px', fontWeight: 'bold' }}>❌ {cepError}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  // 2º RETURN: Renderização completa da Interface Varejo Principal
   return (
     <div style={{ 
       maxWidth: '1000px', 
       margin: '40px auto', 
       padding: '30px', 
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-      backgroundColor: '#fecdd3', // Fundo Rose/Goiaba chamativo que destaca os elementos brancos
+      backgroundColor: '#fecdd3', 
       borderRadius: '20px',
       boxShadow: '0 10px 30px rgba(0, 0, 0, 0.15)',
-      border: '4px solid #e11d48' // Borda forte vermelha estilo varejo de ofertas
+      border: '4px solid #e11d48' 
     }}>
       
       {/* CABEÇALHO */}
@@ -204,7 +272,7 @@ function App() {
                     boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
                   }}
                 >
-                  🔄 Usar GPS Automático
+                  🔄 Voltar para o GPS Automático
                 </button>
               )}
             </div>
@@ -267,7 +335,7 @@ function App() {
         {/* FORMULÁRIO DE CEP */}
         <form onSubmit={handleCepSubmit} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '15px', paddingTop: '15px', borderTop: '1px dashed #f43f5e', flexWrap: 'wrap' }}>
           <label style={{ fontSize: '14px', fontWeight: '700', color: '#4c0519' }}>
-            Quer mudar o CEP? Digite aqui:
+            Digitar Novo CEP de Destino:
           </label>
           <div style={{ display: 'flex', gap: '8px' }}>
             <input 
@@ -310,12 +378,12 @@ function App() {
       {optimizationResult && (
         <section style={{ marginTop: '10px' }}>
           
-          {/* CARTAZ DE PREÇO DO CAMPEÃO (ESTILO PLACA DE SUPERMERCADO) */}
+          {/* CARTAZ DE PREÇO DO CAMPEÃO */}
           <div style={{ 
             padding: '24px', 
-            border: '4px dashed #facc15', // Borda tracejada amarela de encarte
+            border: '4px dashed #facc15', 
             borderRadius: '16px', 
-            backgroundColor: '#dc2626', // Fundo Vermelho Alerta Máximo
+            backgroundColor: '#dc2626', 
             boxShadow: '0 8px 25px rgba(220,38,38,0.3)',
             marginBottom: '30px',
             color: '#ffffff'
@@ -325,28 +393,27 @@ function App() {
                 💥 CAMPEÃO DE ECONOMIA ENCONTRADO! 💥
               </h2>
               <span style={{ backgroundColor: '#facc15', color: '#000', padding: '6px 14px', borderRadius: '4px', fontSize: '14px', fontWeight: '900', textTransform: 'uppercase', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }}>
-                O MAIS BARATO!
+                RECOMENDADO!
               </span>
             </div>
             
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', margin: '20px 0' }}>
               <div style={{ backgroundColor: '#fef08a', padding: '12px 16px', borderRadius: '8px', border: '2px solid #facc15' }}>
-                <span style={{ fontSize: '12px', color: '#854d0e', display: 'block', fontWeight: '800' }}>REDE RECOMENDADA</span>
-                <strong style={{ fontSize: '24px', color: '#000', fontWeight: '900' }}>{optimizationResult?.best_market}</strong>
+                <span style={{ fontSize: '12px', color: '#854d0e', display: 'block', fontWeight: '800' }}>REDE SELECIONADA</span>
+                <strong style={{ fontSize: '22px', color: '#000', fontWeight: '900' }}>{optimizationResult?.best_market}</strong>
               </div>
               <div style={{ backgroundColor: '#fff', padding: '12px 16px', borderRadius: '8px', color: '#000' }}>
                 <span style={{ fontSize: '12px', color: '#475569', display: 'block', fontWeight: '800' }}>SOMA DOS PRODUTOS</span>
-                <strong style={{ fontSize: '22px', color: '#dc2626', fontWeight: '900' }}>R$ {totalProdutosCesta.toFixed(2)}</strong>
+                <strong style={{ fontSize: '20px', color: '#dc2626', fontWeight: '900' }}>R$ {totalProdutosCesta.toFixed(2)}</strong>
               </div>
               <div style={{ backgroundColor: '#fff', padding: '12px 16px', borderRadius: '8px', color: '#000' }}>
                 <span style={{ fontSize: '12px', color: '#475569', display: 'block', fontWeight: '800' }}>TAXA DE DESLOCAMENTO</span>
-                <strong style={{ fontSize: '22px', color: custoDeslocamento > 0 ? '#dc2626' : '#16a34a', fontWeight: '900' }}>
+                <strong style={{ fontSize: '20px', color: custoDeslocamento > 0 ? '#dc2626' : '#16a34a', fontWeight: '900' }}>
                   {custoDeslocamento > 0 ? `R$ ${custoDeslocamento.toFixed(2)}` : 'GRÁTIS!'}
                 </strong>
               </div>
             </div>
 
-            {/* PLACA DA PROMOÇÃO PRINCIPAL */}
             <div style={{ 
               backgroundColor: '#facc15', 
               color: '#dc2626', 
@@ -357,7 +424,7 @@ function App() {
               boxShadow: 'inset 0 0 10px rgba(0,0,0,0.1)'
             }}>
               <span style={{ fontSize: '15px', fontWeight: '900', display: 'block', textTransform: 'uppercase', letterSpacing: '1px', color: '#000' }}>
-                PREÇO TOTAL DA SUA CESTA LEVANDO TUDO NO {optimizationResult?.best_market}:
+                CUSTO TOTAL FINAL ESTIMADO:
               </span>
               <strong style={{ fontSize: '42px', fontWeight: '950', display: 'block', lineHeight: '1', marginTop: '5px' }}>
                 R$ {custoTotalFinal.toFixed(2)}
@@ -365,9 +432,9 @@ function App() {
             </div>
           </div>
 
-          {/* LISTA COMPARTIVA - RANKING DE PREÇOS */}
+          {/* LISTA COMPARATIVA */}
           <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#ffffff', backgroundColor: '#be123c', padding: '10px 15px', borderRadius: '6px', marginBottom: '15px', textTransform: 'uppercase', textAlign: 'center' }}>
-            📊 COMPARATIVO DE PREÇOS ENTRE AS REDES DA REGIÃO ({comparativo.length})
+            📊 RANKING DE VALORES DA REGIÃO ({comparativo.length})
           </h3>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -392,21 +459,19 @@ function App() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <div style={{ fontSize: '18px', fontWeight: '900', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}>
                       📍 {mercado?.market_name}
-                      {isBest && <span style={{fontSize: '11px', backgroundColor: '#facc15', color: '#000', padding: '3px 8px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase'}}>CAMPEÃO</span>}
+                      {isBest && <span style={{fontSize: '11px', backgroundColor: '#facc15', color: '#000', padding: '3px 8px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase'}}>MELHOR OPÇÃO</span>}
                     </div>
                     <div style={{ color: '#475569', fontSize: '14px', fontWeight: '600' }}>
                       Distância: <strong>{(mercado?.distancia || 0).toFixed(2)} km</strong>
                     </div>
                   </div>
 
-                  {/* MINI CARTAZ DE OFERTA INDIVIDUAL */}
                   <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
                     <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '11px', color: '#64748b', display: 'block', fontWeight: '700' }}>SOMA PROD.</span>
+                      <span style={{ fontSize: '11px', color: '#64748b', display: 'block', fontWeight: '700' }}>PRODUTOS</span>
                       <span style={{ fontSize: '15px', color: '#334155', fontWeight: '700' }}>R$ {((mercado?.total_produtos) || 0).toFixed(2)}</span>
                     </div>
                     
-                    {/* PLACA DE PREÇO DO CARD */}
                     <div style={{ 
                       backgroundColor: isBest ? '#dc2626' : '#334155', 
                       color: isBest ? '#facc15' : '#ffffff', 
@@ -417,7 +482,7 @@ function App() {
                       boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
                       minWidth: '110px'
                     }}>
-                      <span style={{ fontSize: '10px', display: 'block', fontWeight: '900', textTransform: 'uppercase', color: isBest ? '#fff' : '#cbd5e1' }}>TOTAL FINAL</span>
+                      <span style={{ fontSize: '10px', display: 'block', fontWeight: '900', textTransform: 'uppercase', color: isBest ? '#fff' : '#cbd5e1' }}>TOTAL + FRETE</span>
                       <strong style={{ fontSize: '20px', fontWeight: '950' }}>
                         R$ {((mercado?.custo_total_final) || 0).toFixed(2)}
                       </strong>
@@ -431,20 +496,7 @@ function App() {
           <button 
             onClick={() => setOptimizationResult(null)} 
             style={{ 
-              marginTop: '30px', 
-              padding: '16px 20px', 
-              width: '100%', 
-              fontSize: '16px', 
-              backgroundColor: '#e11d48', 
-              color: '#fff', 
-              border: 'none', 
-              borderRadius: '8px', 
-              cursor: 'pointer', 
-              fontWeight: '900',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-              boxShadow: '0 4px 15px rgba(225,29,72,0.3)',
-              transition: 'background-color 0.2s'
+              marginTop: '30px', padding: '16px 20px', width: '100%', fontSize: '16px', backgroundColor: '#e11d48', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.5px', boxShadow: '0 4px 15px rgba(225,29,72,0.3)'
             }}
           >
             🛒 Montar uma Nova Lista de Compras
